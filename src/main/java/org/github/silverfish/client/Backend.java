@@ -17,7 +17,8 @@ public interface Backend<E> {
      * Takes <code>count</code> elements from the queue.
      *
      * @param count how many elements to take from the queue
-     * @param blocking blocking behaviour; if true, it will wait for data to appear in the queue, if false, it will immediately return on an empty queue
+     * @param blocking blocking behaviour; if true, it will wait for data to appear in the queue, if false, it will
+     *                 immediately return on an empty queue
      * @return the data you asked for; keyed on payload UUID, with the payload in the value
      */
     Map<String, E> dequeue(int count, boolean blocking);
@@ -45,7 +46,10 @@ public interface Backend<E> {
     List<E> peek(int limit);
 
     /**
-     * Cleans up the working queue with payloads that have been languishing there for too long. A specified timeout tells you how long a consumer can take in order to process an item. If that timeout is exceeded, it will mark that item as failed and then take the appropriate action. Either re-enqueue it, or remove it from the queue as trash.
+     * Cleans up the working queue with payloads that have been languishing there for too long. A specified timeout
+     * tells you how long a consumer can take in order to process an item. If that timeout is exceeded, it will mark
+     * that item as failed and then take the appropriate action. Either re-enqueue it, or remove it from the queue as
+     * trash.
      */
     void cleanup();
 
