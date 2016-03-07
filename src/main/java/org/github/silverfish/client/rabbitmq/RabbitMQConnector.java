@@ -13,11 +13,11 @@ import java.util.logging.Level;
 /**
  * Created by pbiswas on 2/25/2016.
  */
-public class RabbitMQConnector implements QueueConnector {
+class RabbitMQConnector implements QueueConnector {
     private static final int CHANNEL;
     private static final String QUEUE_TYPE;
     private static final Address[] SERVER_ADDRESSES;
-    private static final Logger LOGGER;
+    //private static final Logger LOGGER;
 
     private Connection conn;
     private Channel channel;
@@ -32,10 +32,10 @@ public class RabbitMQConnector implements QueueConnector {
                 new Address("dc201redisprov-02.lhr4.dqs.booking.com"),
                 new Address("dc201redisprov-03.lhr4.dqs.booking.com")
         };
-        LOGGER = Logger.getLogger("FileLogger");
+        //LOGGER = Logger.getLogger("FileLogger");
     }
 
-    public RabbitMQConnection(final String name) throws IOException, TimeoutException {
+    public RabbitMQConnector(final String name) throws IOException, TimeoutException {
         if (Strings.isNullOrEmpty(name)) {
             throw new IllegalArgumentException("Argument name is null or empty");
         }
@@ -57,12 +57,12 @@ public class RabbitMQConnector implements QueueConnector {
     @Override
     public void close() throws IOException {
         try {
+            //no need to close channel as conn close will close channel.
+            //but channel can be closed as a good practice.
             if (conn != null) {
                 conn.close();
-                conn = null;
-                channel = null;
             }
-        } catch (IOException e) {
+        } catch (final IOException e) {
             //LOGGER.log(LEVEL.SEVERE, "Exception while closing the connection");
             throw e;
         }
@@ -108,17 +108,17 @@ public class RabbitMQConnector implements QueueConnector {
     public Map<String, Integer> stats() throws IOException {
         final Map<String, Integer> map = new HashMap<>();
         final AMQP.Queue.DeclareOk result
-                = channel.queueDeclare(name, false, false, false, new HashMap<>() {{ put("passive", 1); }});
+                = channel.queueDeclare(name, true, false, false, new HashMap<String, Object>() {{ put("passive", 1); }});
 
         map.put("length", result.getQueue().length());
         map.put("consumers", result.getConsumerCount());
         return map;
     }
 
-    private final Connection createConnection() throws TimeoutException, IOException {
+    private Connection createConnection() throws TimeoutException, IOException {
         ConnectionFactory factory = new ConnectionFactory();
-        factory.setUsername("");
-        factory.setPassword("");
+        //factory.setUsername(""); TODO is it required?
+        //factory.setPassword("");
 
         return factory.newConnection(SERVER_ADDRESSES);
     }
@@ -133,12 +133,14 @@ public class RabbitMQConnector implements QueueConnector {
             channel.queueDeclare(dlxName, true, false, false, null);
             channel.queueBind(dlxName, dlxName, name);
 
+            //channel.exchangeDeclare(name, "direct");
             channel.queueDeclare(name, true, false, false, DEAD_LETTER_OPTIONS);
+            //channel.queueBind(name, name, name);
 
-        } catch (IOException e) {
+        } catch (final IOException e) {
             //LOGGER.log(LEVEL.SEVERE, "Error while initializing channel");
             throw e;
-        } catch (TimeoutException e) {
+        } catch (final TimeoutException e) {
             //LOGGER.log(LEVEL.SEVERE, "Timeout error while initializing channel");
             throw e;
         }
