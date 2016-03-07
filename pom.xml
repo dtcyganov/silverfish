@@ -25,6 +25,7 @@
             <version>2.8.0</version>
         </dependency>
 
+        <!-- mysql libraries -->
         <!-- mysql jdbc connector -->
         <dependency>
             <groupId>mysql</groupId>
@@ -36,6 +37,13 @@
             <groupId>com.rabbitmq</groupId>
             <artifactId>amqp-client</artifactId>
             <version>3.6.0</version>
+	    </dependency>
+        <!-- kafka libraries -->
+        <!-- official kafka libs: http://kafka.apache.org/090/javadoc/index.html?org/apache/kafka/clients/consumer/KafkaConsumer.html -->
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-clients</artifactId>
+            <version>0.8.2.0</version>
         </dependency>
 
     </dependencies>
