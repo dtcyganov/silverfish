@@ -105,13 +105,13 @@ class RabbitMQConnector implements QueueConnector {
     }
 
     @Override
-    public Map<String, Integer> stats() throws IOException {
-        final Map<String, Integer> map = new HashMap<>();
+    public Map<String, Long> stats() throws IOException {
+        final Map<String, Long> map = new HashMap<>();
         final AMQP.Queue.DeclareOk result
                 = channel.queueDeclare(name, true, false, false, new HashMap<String, Object>() {{ put("passive", 1); }});
 
-        map.put("length", result.getQueue().length());
-        map.put("consumers", result.getConsumerCount());
+        map.put("length", (long) result.getQueue().length());
+        map.put("consumers", (long) result.getConsumerCount());
         return map;
     }
 

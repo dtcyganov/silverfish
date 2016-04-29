@@ -3,38 +3,40 @@ package org.github.silverfish.client;
 import java.util.List;
 import java.util.Map;
 
-public interface Backend<E> {
+public interface Backend<I, E, M, QE extends QueueElement<I, E, M>> {
 
     /**
-     * Put <code>items</code> to the queue.
+     * Put <code>elements</code> to the queue.
      *
-     * @param items items to put
-     * @return number of added items
+     * @param elements elements to put
+     * @return list of added elements wrapped into {@link QueueElement}
      */
-    int enqueue(List<E> items);
+    List<QE> enqueue(List<E> elements) throws Exception;
 
     /**
      * Takes <code>count</code> elements from the queue.
      *
      * @param count how many elements to take
      * @param blocking wait until some data
-     * @return map from identifier of payload item to the payload item
+     * @return list of dequeued elements wrapped into {@link QueueElement}
      */
-    Map<String, E> dequeue(int count, boolean blocking);
+    List<QE> dequeue(long count, boolean blocking) throws Exception;
 
     /**
      * Mark elements as processed.
      *
      * @param ids which elements to mark
+     * TODO: return elements
      */
-    void markProcessed(List<String> ids);
+    long markProcessed(List<I> ids) throws Exception;
 
     /**
      * Mark elements as failed.
      *
      * @param ids which elements to mark
+     * TODO: return elements
      */
-    void markFailed(List<String> ids);
+    long markFailed(List<I> ids) throws Exception;
 
     /**
      * Get last <code>limit</code> elements.
@@ -42,36 +44,36 @@ public interface Backend<E> {
      * @param limit elements count to return
      * @return last elements.
      */
-    List<E> peek(int limit);
+    List<QE> peek(long limit) throws Exception;
 
     /**
      * Removes busy expired items.
      */
-    void cleanup();
+    void cleanup() throws Exception;
 
     /**
      * Handle failed items.
      *
      * @return payoads of failed items
      */
-    List<E> collectGarbage();
+    List<QE> collectGarbage() throws Exception;
 
     /**
      * Deletes everything in the queue
      */
-    void flush();
+    void flush() throws Exception;
 
     /**
      * Returns number of elements in the queue.
      *
      * @return number of elements in the queue
      */
-    int length();
+    long length() throws Exception;
 
     /**
      * Returns stats of the queue (how many elements are in each state).
      *
      * @return stats of the queue (how many elements are in each state)
      */
-    Map<ItemState, Integer> stats();
+    Map<String, Long> stats() throws Exception;
 }

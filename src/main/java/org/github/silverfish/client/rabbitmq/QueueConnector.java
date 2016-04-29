@@ -15,5 +15,5 @@ interface QueueConnector {
     void reject(final long deliveryTag, final boolean requeue) throws IOException;
     int length() throws IOException;
     void flush() throws IOException;
-    Map<String, Integer> stats() throws IOException;
+    Map<String, Long> stats() throws IOException;
 }

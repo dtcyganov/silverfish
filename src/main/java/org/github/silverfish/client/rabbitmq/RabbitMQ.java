@@ -4,20 +4,16 @@ import com.google.common.base.Strings;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.GetResponse;
 import org.github.silverfish.client.Backend;
-import org.github.silverfish.client.ItemState;
-import java.io.*;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import org.github.silverfish.client.QueueElement;
+
+import java.io.IOException;
+import java.util.*;
 import java.util.concurrent.TimeoutException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  * Created by pbiswas on 2/25/2016.
  */
-public class RabbitMQ<E> implements Backend<E> {
+public class RabbitMQ implements Backend<Long, byte[], Void, QueueElement<Long, byte[], Void>> {
     private static final String QUEUE_TYPE;
     //private static final Logger LOGGER;
 
@@ -61,25 +57,24 @@ public class RabbitMQ<E> implements Backend<E> {
     }
 
     @Override
-    public int enqueue(final List<E> items) throws IOException {
-        int totalSize = 0;
+    public List<QueueElement<Long, byte[], Void>> enqueue(final List<byte[]> items) throws IOException {
         if (items == null || items.isEmpty()) {
-            return totalSize;
+            return Collections.emptyList();
         }
 
-        for (final E item : items) {
-            final byte[] data = serialize(item);
-            totalSize += data.length;
-
-            mqConnection.publish(data);
+        List<QueueElement<Long, byte[], Void>> result = new ArrayList<>(items.size());
+        for (final byte[] item : items) {
+            mqConnection.publish(item);
+            //TODO: add real id here
+            result.add(new QueueElement<>(null, item, null));
         }
 
-        return totalSize;
+        return result;
     }
 
     @Override
-    public Map<String, E> dequeue(int count, boolean blocking) throws IOException, ClassNotFoundException, InterruptedException {
-        final Map<String, E> map = new HashMap<>();
+    public List<QueueElement<Long, byte[], Void>> dequeue(long count, boolean blocking) throws IOException, InterruptedException {
+        final List<QueueElement<Long, byte[], Void>> result = new ArrayList<>();
 
         int timeSpent = 0;
 
@@ -105,22 +100,22 @@ public class RabbitMQ<E> implements Backend<E> {
                 continue;
             }
 
-            final E data = deserialize(response.getBody());
+            final byte[] data = response.getBody();
 
-            map.put("" + deliveryTag, data);
+            result.add(new QueueElement<>(deliveryTag, data, null));
             if (response.getEnvelope().isRedeliver()) {
                 redeliveredIds.put(deliveryTag, 1);
             }
-            timeSpent += (new Date().getTime() - response.getProps().getTimestamp().getTime()) / 1000;
+            timeSpent += (System.currentTimeMillis() - response.getProps().getTimestamp().getTime()) / 1000;
             count--;
         }
 
         //TODO timeSpent is not returned
-        return map;
+        return result;
     }
 
     @Override
-    public int markProcessed(final List<Long> ids) throws IOException {
+    public long markProcessed(final List<Long> ids) throws IOException {
         if (ids == null || ids.size() == 0) {
             return 0;
         }
@@ -136,7 +131,7 @@ public class RabbitMQ<E> implements Backend<E> {
     }
 
     @Override
-    public int markFailed(final List<Long> ids) throws IOException {
+    public long markFailed(final List<Long> ids) throws IOException {
         if (ids == null || ids.size() == 0) {
             return 0;
         }
@@ -154,7 +149,7 @@ public class RabbitMQ<E> implements Backend<E> {
     }
 
     @Override
-    public List<E> peek(int limit) {
+    public List<QueueElement<Long, byte[], Void>> peek(long limit) {
         throw new UnsupportedOperationException("Sorry, RabbitMQ cannot peek");
     }
 
@@ -163,7 +158,7 @@ public class RabbitMQ<E> implements Backend<E> {
     }
 
     @Override
-    public List<E> collectGarbage() {
+    public List<QueueElement<Long, byte[], Void>> collectGarbage() {
         return null;
     }
 
@@ -173,61 +168,12 @@ public class RabbitMQ<E> implements Backend<E> {
     }
 
     @Override
-    public int length() throws IOException {
+    public long length() throws IOException {
         return mqConnection.length();
     }
 
     @Override
-    public Map<ItemState, Integer> stats() throws IOException {
+    public Map<String, Long> stats() throws IOException {
         return mqConnection.stats();
-    }
-
-    private byte[] serialize(final E input) throws IOException {
-        ByteArrayOutputStream bos = null;
-        ObjectOutputStream out = null;
-
-        try {
-            bos = new ByteArrayOutputStream();
-            out = new ObjectOutputStream(bos);
-            out.writeObject(input);
-        } catch (final IOException e) {
-            //LOGGER.log(Level.SEVERE, "Failed to serialize input object" + e.getMessage());
-            throw e;
-        } finally {
-            try {
-                if (out != null) {
-                    out.flush();
-                    out.close();
-                }
-            } catch (final Exception e) {
-                //LOGGER.log(Level.SEVERE, "Failed to close ObjectOutputStream");
-            }
-        }
-
-        return bos != null ? bos.toByteArray() : null;
-    }
-
-    private E deserialize(final byte[] data) throws IOException, ClassNotFoundException {
-        ByteArrayInputStream bis = null;
-        ObjectInputStream in = null;
-
-        try {
-            bis = new ByteArrayInputStream(data);
-            in = new ObjectInputStream(bis);
-            return (E) in.readObject();
-        } catch (final IOException e) {
-            //LOGGER.log(Level.SEVERE, "Failed to deserialize data " + e.getMessage());
-            throw e;
-        } finally {
-            try {
-                if (in != null) {
-                    in.close();
-                }
-            } catch (final Exception e) {
-                //LOGGER.log(Level.SEVERE, "Failed to close ObjectInputStream");
-            }
-        }
-
-        return null;
     }
 }
