@@ -4,11 +4,13 @@ import com.google.common.base.Strings;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.GetResponse;
 import org.github.silverfish.client.Backend;
+import org.github.silverfish.client.CleanupAction;
 import org.github.silverfish.client.QueueElement;
 
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Predicate;
 
 /**
  * Created by pbiswas on 2/25/2016.
@@ -70,6 +72,11 @@ public class RabbitMQ implements Backend<Long, byte[], Void, QueueElement<Long, 
         }
 
         return result;
+    }
+
+    @Override
+    public List<QueueElement<Long, byte[], Void>> enqueue(byte[]... elements) throws Exception {
+        return enqueue(Arrays.asList(elements));
     }
 
     @Override
@@ -154,11 +161,14 @@ public class RabbitMQ implements Backend<Long, byte[], Void, QueueElement<Long, 
     }
 
     @Override
-    public void cleanup() {
+    public List<QueueElement<Long, byte[], Void>> cleanup(CleanupAction cleanupAction,
+                                                          Predicate<Void> condition) {
+        throw new UnsupportedOperationException();
     }
 
     @Override
-    public List<QueueElement<Long, byte[], Void>> collectGarbage() {
+    public List<QueueElement<Long, byte[], Void>> collectGarbage(Predicate<QueueElement<Long, byte[], Void>> filter,
+                                                                 int chunk, int logLimit) throws Exception {
         return null;
     }
 

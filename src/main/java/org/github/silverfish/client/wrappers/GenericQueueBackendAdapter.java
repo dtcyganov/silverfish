@@ -1,11 +1,14 @@
 package org.github.silverfish.client.wrappers;
 
 import org.github.silverfish.client.Backend;
+import org.github.silverfish.client.CleanupAction;
 import org.github.silverfish.client.QueueElement;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.toList;
@@ -46,6 +49,12 @@ public class GenericQueueBackendAdapter<I, E, M, BI, BE, BM> implements Backend<
         return deserializeQueueElements(backend.enqueue(serializedItems));
     }
 
+    @SafeVarargs
+    @Override
+    public final List<QueueElement<I, E, M>> enqueue(E... elements) throws Exception {
+        return enqueue(Arrays.asList(elements));
+    }
+
     @Override
     public List<QueueElement<I, E, M>> dequeue(long count, boolean blocking) throws Exception {
         return deserializeQueueElements(backend.dequeue(count, blocking));
@@ -67,13 +76,16 @@ public class GenericQueueBackendAdapter<I, E, M, BI, BE, BM> implements Backend<
     }
 
     @Override
-    public void cleanup() throws Exception {
-        backend.cleanup();
+    public List<QueueElement<I, E, M>> cleanup(CleanupAction cleanupAction, Predicate<M> condition) throws Exception {
+        return deserializeQueueElements(backend.cleanup(cleanupAction, bm -> condition.test(metadataDeserializer.apply(bm))));
     }
 
     @Override
-    public List<QueueElement<I, E, M>> collectGarbage() throws Exception {
-        return deserializeQueueElements(backend.collectGarbage());
+    public List<QueueElement<I, E, M>> collectGarbage(Predicate<QueueElement<I, E, M>> filter, int chunk, int logLimit) throws Exception {
+        return deserializeQueueElements(backend.collectGarbage(
+                e -> filter.test(deserializeQueueElement(e)),
+                chunk, logLimit
+        ));
     }
 
     @Override

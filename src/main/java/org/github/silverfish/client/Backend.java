@@ -2,6 +2,7 @@ package org.github.silverfish.client;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 
 public interface Backend<I, E, M, QE extends QueueElement<I, E, M>> {
 
@@ -12,6 +13,14 @@ public interface Backend<I, E, M, QE extends QueueElement<I, E, M>> {
      * @return list of added elements wrapped into {@link QueueElement}
      */
     List<QE> enqueue(List<E> elements) throws Exception;
+
+    /**
+     * Put <code>elements</code> to the queue.
+     *
+     * @param elements elements to put
+     * @return list of added elements wrapped into {@link QueueElement}
+     */
+    List<QE> enqueue(E... elements) throws Exception;
 
     /**
      * Takes <code>count</code> elements from the queue.
@@ -48,15 +57,18 @@ public interface Backend<I, E, M, QE extends QueueElement<I, E, M>> {
 
     /**
      * Removes busy expired items.
+     * TODO: fix javadoc
      */
-    void cleanup() throws Exception;
+    List<QE> cleanup(CleanupAction cleanupAction, Predicate<M> condition) throws Exception;
 
     /**
      * Handle failed items.
      *
      * @return payoads of failed items
+     * TODO: fix javadoc
      */
-    List<QE> collectGarbage() throws Exception;
+    List<QE> collectGarbage(Predicate<QE> filter,
+                            int chunk, int logLimit) throws Exception;
 
     /**
      * Deletes everything in the queue
