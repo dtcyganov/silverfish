@@ -44,20 +44,20 @@ public class GenericQueueBackendAdapter<I, E, M, BI, BE, BM> implements Backend<
     }
 
     @Override
-    public List<QueueElement<I, E, M>> enqueue(List<E> items) throws Exception {
+    public List<QueueElement<I, E, M>> enqueueNewElements(List<E> items) throws Exception {
         List<BE> serializedItems = items.stream().map(elementSerializer::apply).collect(toList());
-        return deserializeQueueElements(backend.enqueue(serializedItems));
+        return deserializeQueueElements(backend.enqueueNewElements(serializedItems));
     }
 
     @SafeVarargs
     @Override
-    public final List<QueueElement<I, E, M>> enqueue(E... elements) throws Exception {
-        return enqueue(Arrays.asList(elements));
+    public final List<QueueElement<I, E, M>> enqueueNewElements(E... elements) throws Exception {
+        return enqueueNewElements(Arrays.asList(elements));
     }
 
     @Override
-    public List<QueueElement<I, E, M>> dequeue(long count, boolean blocking) throws Exception {
-        return deserializeQueueElements(backend.dequeue(count, blocking));
+    public List<QueueElement<I, E, M>> dequeueForProcessing(long count, boolean blocking) throws Exception {
+        return deserializeQueueElements(backend.dequeueForProcessing(count, blocking));
     }
 
     @Override
@@ -71,8 +71,8 @@ public class GenericQueueBackendAdapter<I, E, M, BI, BE, BM> implements Backend<
     }
 
     @Override
-    public List<QueueElement<I, E, M>> peek(long limit) throws Exception {
-        return deserializeQueueElements(backend.peek(limit));
+    public List<QueueElement<I, E, M>> peekUnprocessedElements(long limit) throws Exception {
+        return deserializeQueueElements(backend.peekUnprocessedElements(limit));
     }
 
     @Override
@@ -81,8 +81,8 @@ public class GenericQueueBackendAdapter<I, E, M, BI, BE, BM> implements Backend<
     }
 
     @Override
-    public List<QueueElement<I, E, M>> collectGarbage(Predicate<QueueElement<I, E, M>> filter, int chunk, int logLimit) throws Exception {
-        return deserializeQueueElements(backend.collectGarbage(
+    public List<QueueElement<I, E, M>> removeFailedElements(Predicate<QueueElement<I, E, M>> filter, int chunk, int logLimit) throws Exception {
+        return deserializeQueueElements(backend.removeFailedElements(
                 e -> filter.test(deserializeQueueElement(e)),
                 chunk, logLimit
         ));

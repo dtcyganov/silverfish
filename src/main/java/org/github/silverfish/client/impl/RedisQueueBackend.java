@@ -3,6 +3,7 @@ package org.github.silverfish.client.impl;
 import com.google.common.collect.Lists;
 import org.github.silverfish.client.Backend;
 import org.github.silverfish.client.CleanupAction;
+import org.github.silverfish.client.ng.Metadata;
 import redis.clients.jedis.Jedis;
 
 import java.util.*;
@@ -13,7 +14,7 @@ import java.util.stream.IntStream;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 
-public class RedisQueueBackend implements Backend<String, String, Map<String, String>, RedisQueueElement> {
+public class RedisQueueBackend implements Backend<String, String, Metadata, StringQueueElement> {
 
     private static final int DEFAULT_CONNECTION_TIMEOUT = 2_000;
     private static final int DEFAULT_SO_TIMEOUT = 1_000;
@@ -34,13 +35,13 @@ public class RedisQueueBackend implements Backend<String, String, Map<String, St
     private final String queueName;
 
     private final Supplier<String> idSupplier;
-    private final Supplier<Map<String, String>> metadataSupplier;
+    private final Supplier<Metadata> metadataSupplier;
 
     private ThreadLocal<Integer> jedisCallsThreadLocal = ThreadLocal.withInitial(() -> 0);
     private ThreadLocal<Jedis> jedisThreadLocal = new ThreadLocal<>();
 
     public RedisQueueBackend(Supplier<String> idSupplier,
-                             Supplier<Map<String, String>> metadataSupplier,
+                             Supplier<Metadata> metadataSupplier,
                              String host, int port, String queueName) {
 
         this(idSupplier, metadataSupplier,
@@ -50,7 +51,7 @@ public class RedisQueueBackend implements Backend<String, String, Map<String, St
     }
 
     public RedisQueueBackend(Supplier<String> idSupplier,
-                             Supplier<Map<String, String>> metadataSupplier,
+                             Supplier<Metadata> metadataSupplier,
                              String host, int port, String queueName,
                              int connectionTimeout, int soTimeout, int claimWaitTimeout,
                              int requeueLimit) {
@@ -67,11 +68,11 @@ public class RedisQueueBackend implements Backend<String, String, Map<String, St
     }
 
     @Override
-    public List<RedisQueueElement> enqueue(List<String> elements) {
+    public List<StringQueueElement> enqueueNewElements(List<String> elements) {
         assureNotEmptyAndWithoutNulls(elements);
 
         try (Jedis rh = getJedis()) {
-            List<RedisQueueElement> resultList = new ArrayList<>(elements.size());
+            List<StringQueueElement> resultList = new ArrayList<>(elements.size());
             for (String e : elements) {
                 String id = idSupplier.get();
                 String key = idToKey(id);
@@ -79,8 +80,8 @@ public class RedisQueueBackend implements Backend<String, String, Map<String, St
                 if (result == null || result == 0) {
                     throw new IllegalStateException(String.format("'%s' already exists in queue '%s'", key, queueName));
                 }
-                Map<String, String> metadata = metadataSupplier.get();
-                rh.hmset(metaKey(key), metadata);
+                Metadata metadata = metadataSupplier.get();
+                rh.hmset(metaKey(key), metadata.toMap());
                 Long lpushResult = rh.lpush(getUnprocessedQueueName(), key);
                 if (lpushResult == null || lpushResult == 0) {
                     throw new RuntimeException(String.format(
@@ -88,19 +89,19 @@ public class RedisQueueBackend implements Backend<String, String, Map<String, St
                             key, getUnprocessedQueueName()));
                 }
 
-                resultList.add(new RedisQueueElement(id, e, metadata));
+                resultList.add(new StringQueueElement(id, e, metadata));
             }
             return resultList;
         }
     }
 
     @Override
-    public List<RedisQueueElement> enqueue(String... elements) throws Exception {
-        return enqueue(Arrays.asList(elements));
+    public List<StringQueueElement> enqueueNewElements(String... elements) throws Exception {
+        return enqueueNewElements(Arrays.asList(elements));
     }
 
     @Override
-    public List<RedisQueueElement> dequeue(long count, boolean blocking) {
+    public List<StringQueueElement> dequeueForProcessing(long count, boolean blocking) {
         assurePositive(count);
         try (Jedis rh = getJedis()) {
             if (count == 1) {
@@ -139,7 +140,7 @@ public class RedisQueueBackend implements Backend<String, String, Map<String, St
                     count = llen;
                 }
 
-                List<RedisQueueElement> items = new ArrayList<>();
+                List<StringQueueElement> items = new ArrayList<>();
                 for (int i = 0; i < count; i++) {
                     String itemKey = rh.rpoplpush(getUnprocessedQueueName(), getWorkingQueueName());
                     if (itemKey != null) {
@@ -169,7 +170,7 @@ public class RedisQueueBackend implements Backend<String, String, Map<String, St
         }
     }
 
-    private RedisQueueElement getElementAndUpdateProcessCount(String key) {
+    private StringQueueElement getElementAndUpdateProcessCount(String key) {
         try (Jedis rh = getJedis()) {
             rh.hincrBy(metaKey(key), "process_count", 1);
             return getItemByKey(key);
@@ -213,14 +214,14 @@ public class RedisQueueBackend implements Backend<String, String, Map<String, St
     }
 
     @Override
-    public List<RedisQueueElement> peek(long limit) {
+    public List<StringQueueElement> peekUnprocessedElements(long limit) {
         return Lists.reverse(getRawItems(getUnprocessedQueueName(), limit));
     }
 
     // aka handle_expired_items
     @Override
-    public List<RedisQueueElement> cleanup(CleanupAction cleanupAction,
-                                           Predicate<Map<String, String>> condition) {
+    public List<StringQueueElement> cleanup(CleanupAction cleanupAction,
+                                            Predicate<Metadata> condition) {
         if (cleanupAction == null) {
             throw new NullPointerException("CleanupAction is null");
         }
@@ -230,17 +231,17 @@ public class RedisQueueBackend implements Backend<String, String, Map<String, St
             //   $rh->lrange($self->_working_queue, -$working_queue_length, -1);
             // which costs us two RPCs, or just reverse what you get from a single RPC...
             List<String> keys = rh.lrange(getWorkingQueueName(), 0, -1).stream().collect(toList());
-            Map<String, Map<String, String>> itemMetadata = keys.stream().collect(toMap(k -> k, this::getMetadataByKey));
+            Map<String, Metadata> itemMetadata = keys.stream().collect(toMap(k -> k, this::getMetadataByKey));
             List<String> candidates = keys.stream().filter(k -> condition.test(itemMetadata.get(k))).collect(toList());
             Map<String, String> itemPayload = candidates.stream().collect(toMap(k -> k, this::getPayloadByKey));
 
-            List<RedisQueueElement> expiredItems = new ArrayList<>();
+            List<StringQueueElement> expiredItems = new ArrayList<>();
 
             for (String key : Lists.reverse(candidates)) {
                 switch (cleanupAction) {
                     case REQUEUE:
                         if (requeue(Collections.singletonList(key), getWorkingQueueName(), true, true) > 0) {
-                            expiredItems.add(new RedisQueueElement(
+                            expiredItems.add(new StringQueueElement(
                                     keyToId(key),
                                     itemPayload.get(key),
                                     itemMetadata.get(key)
@@ -250,7 +251,7 @@ public class RedisQueueBackend implements Backend<String, String, Map<String, St
                     case DROP:
                         Long result = rh.lrem(getWorkingQueueName(), -1, itemKey(key));
                         if (result != null && result != 0) {
-                            expiredItems.add(new RedisQueueElement(
+                            expiredItems.add(new StringQueueElement(
                                     keyToId(key),
                                     itemPayload.get(key),
                                     itemMetadata.get(key)
@@ -267,10 +268,10 @@ public class RedisQueueBackend implements Backend<String, String, Map<String, St
 
     // aka remove_failed_items
     @Override
-    public List<RedisQueueElement> collectGarbage(Predicate<RedisQueueElement> filter,
-                                                  int chunk, int logLimit) {
+    public List<StringQueueElement> removeFailedElements(Predicate<StringQueueElement> filter,
+                                                         int chunk, int logLimit) {
         try (Jedis rh = getJedis()) {
-            List<RedisQueueElement> removedItems = new ArrayList<>();
+            List<StringQueueElement> removedItems = new ArrayList<>();
 
             processFailedItems(chunk, item -> {
                 if (filter.test(item)) {
@@ -293,7 +294,7 @@ public class RedisQueueBackend implements Backend<String, String, Map<String, St
         }
     }
 
-    private long[] processFailedItems(int maxCount, Predicate<RedisQueueElement> filter) {
+    private long[] processFailedItems(int maxCount, Predicate<StringQueueElement> filter) {
         assurePositive(maxCount);
 
         try (Jedis rh = getJedis()) {
@@ -369,7 +370,7 @@ public class RedisQueueBackend implements Backend<String, String, Map<String, St
         }
     }
 
-    public Map<String, List<RedisQueueElement>> getState() {
+    public Map<String, List<StringQueueElement>> getState() {
         return getAllQueues().stream().collect(toMap(q -> q, this::getRawItems));
     }
 
@@ -411,11 +412,11 @@ public class RedisQueueBackend implements Backend<String, String, Map<String, St
         }
     }
 
-    private List<RedisQueueElement> getRawItems(String concreteQueueName) {
+    private List<StringQueueElement> getRawItems(String concreteQueueName) {
         return getRawItems(concreteQueueName, Integer.MAX_VALUE);
     }
 
-    private List<RedisQueueElement> getRawItems(String concreteQueueName, long numberOfItems) {
+    private List<StringQueueElement> getRawItems(String concreteQueueName, long numberOfItems) {
         assurePositive(numberOfItems);
 
         try (Jedis rh = getJedis()) {
@@ -443,19 +444,19 @@ public class RedisQueueBackend implements Backend<String, String, Map<String, St
         }
     }
 
-    private Map<String, String> getMetadataByKey(String key) {
+    private Metadata getMetadataByKey(String key) {
         try (Jedis rh = getJedis()) {
             Map<String, String> metadata = rh.hgetAll(metaKey(key));
             if (metadata == null) {
                 throw new IllegalStateException(String.format(
                         "Found item_key: '%s' but not its metadata! This should never happen!", key));
             }
-            return metadata;
+            return new Metadata(metadata);
         }
     }
 
-    private RedisQueueElement getItemByKey(String key) {
-        return new RedisQueueElement(
+    private StringQueueElement getItemByKey(String key) {
+        return new StringQueueElement(
                 keyToId(key),
                 getPayloadByKey(key),
                 getMetadataByKey(key)

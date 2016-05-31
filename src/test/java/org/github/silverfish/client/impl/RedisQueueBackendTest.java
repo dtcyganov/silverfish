@@ -2,6 +2,8 @@ package org.github.silverfish.client.impl;
 
 import org.github.silverfish.client.CleanupAction;
 import org.github.silverfish.client.QueueElement;
+import org.github.silverfish.client.ng.RedisQueueOperations;
+import org.github.silverfish.client.ng.RedisQueueBackend2;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -15,17 +17,22 @@ import static org.junit.Assert.assertEquals;
 
 public class RedisQueueBackendTest {
 
-    private RedisQueueBackend backend;
+//    private RedisQueueBackend backend;
+    private RedisQueueBackend2 backend;
     private Process redisProcess;
 
     @Before
     public void setUp() throws Exception {
         redisProcess = new ProcessBuilder("redis-server",  "--port", "6389").start();
-        backend = new RedisQueueBackend(
+//        backend = new RedisQueueBackend(
+//                new UUIDSupplier(),
+//                new StatsMetadataSupplier(),
+//                "localhost", 6389,
+//                "test");
+        backend = new RedisQueueBackend2(
+                new RedisQueueOperations("localhost", 6389, "test"),
                 new UUIDSupplier(),
-                new StatsMetadataSupplier(),
-                "localhost", 6389,
-                "test");
+                new StatsMetadataSupplier());
         Thread.sleep(100);
     }
 
@@ -39,12 +46,12 @@ public class RedisQueueBackendTest {
     public void testEnqueueAndPeak() throws Exception {
         printState();
 
-        List<RedisQueueElement> enqueueResult = backend.enqueue("test-1", "test-2");
+        List<StringQueueElement> enqueueResult = backend.enqueueNewElements("test-1", "test-2");
         assertEquals(2, enqueueResult.size());
         assertEquals("test-1", enqueueResult.get(0).getElement());
         assertEquals("test-2", enqueueResult.get(1).getElement());
 
-        List<RedisQueueElement> peekResult = backend.peek(Integer.MAX_VALUE);
+        List<StringQueueElement> peekResult = backend.peekUnprocessedElements(Integer.MAX_VALUE);
         assertEquals(2, peekResult.size());
 
         assertEquals("test-1", peekResult.get(0).getElement());
@@ -60,9 +67,9 @@ public class RedisQueueBackendTest {
     public void testEnqueueAndDequeue() throws Exception {
         printState();
 
-        List<RedisQueueElement> enqueueResult = backend.enqueue("test-1", "test-2");
+        List<StringQueueElement> enqueueResult = backend.enqueueNewElements("test-1", "test-2");
 
-        List<RedisQueueElement> dequeueResult = backend.dequeue(Integer.MAX_VALUE, false);
+        List<StringQueueElement> dequeueResult = backend.dequeueForProcessing(Integer.MAX_VALUE, false);
         assertEquals(2, dequeueResult.size());
 
         assertEquals("test-1", dequeueResult.get(0).getElement());
@@ -71,7 +78,7 @@ public class RedisQueueBackendTest {
         assertEquals(enqueueResult.get(0).getId(), dequeueResult.get(0).getId());
         assertEquals(enqueueResult.get(1).getId(), dequeueResult.get(1).getId());
 
-        assertEquals(0, backend.dequeue(Integer.MAX_VALUE, false).size());
+        assertEquals(0, backend.dequeueForProcessing(Integer.MAX_VALUE, false).size());
 
         printState();
     }
@@ -80,9 +87,9 @@ public class RedisQueueBackendTest {
     public void testEnqueueDequeueAndMarkProcessed() throws Exception {
         printState();
 
-        List<RedisQueueElement> enqueueResult = backend.enqueue("test-1", "test-2");
+        List<StringQueueElement> enqueueResult = backend.enqueueNewElements("test-1", "test-2");
         List<String> ids = enqueueResult.stream().map(QueueElement::getId).collect(toList());
-        backend.dequeue(Integer.MAX_VALUE, false);
+        backend.dequeueForProcessing(Integer.MAX_VALUE, false);
         assertEquals(2, backend.markProcessed(ids));
 
         printState();
@@ -92,13 +99,13 @@ public class RedisQueueBackendTest {
     public void testEnqueueAndSeveralDequeue() throws Exception {
         printState();
 
-        List<RedisQueueElement> enqueueResult = backend.enqueue(Arrays.asList("test-1", "test-2", "test-3"));
+        List<StringQueueElement> enqueueResult = backend.enqueueNewElements(Arrays.asList("test-1", "test-2", "test-3"));
 
-        List<RedisQueueElement> dequeueResult = backend.dequeue(1, false);
+        List<StringQueueElement> dequeueResult = backend.dequeueForProcessing(1, false);
         assertEquals(1, dequeueResult.size());
         assertEquals(enqueueResult.get(0).getId(), dequeueResult.get(0).getId());
 
-        List<RedisQueueElement> secondDequeueResult = backend.dequeue(3, false);
+        List<StringQueueElement> secondDequeueResult = backend.dequeueForProcessing(3, false);
         assertEquals(2, secondDequeueResult.size());
         assertEquals(enqueueResult.get(1).getId(), secondDequeueResult.get(0).getId());
         assertEquals(enqueueResult.get(2).getId(), secondDequeueResult.get(1).getId());
@@ -110,10 +117,10 @@ public class RedisQueueBackendTest {
     public void testFlush() throws Exception {
         printState();
 
-        backend.enqueue("test-1", "test-2");
+        backend.enqueueNewElements("test-1", "test-2");
         backend.flush();
-        assertEquals(0, backend.peek(Integer.MAX_VALUE).size());
-        assertEquals(0, backend.dequeue(Integer.MAX_VALUE, false).size());
+        assertEquals(0, backend.peekUnprocessedElements(Integer.MAX_VALUE).size());
+        assertEquals(0, backend.dequeueForProcessing(Integer.MAX_VALUE, false).size());
 
         printState();
     }
@@ -122,10 +129,10 @@ public class RedisQueueBackendTest {
     public void testMarkFailed() throws Exception {
         printState();
 
-        List<RedisQueueElement> enqueueResult = backend.enqueue("test-1", "test-2");
+        List<StringQueueElement> enqueueResult = backend.enqueueNewElements("test-1", "test-2");
         printState();
         List<String> ids = enqueueResult.stream().map(QueueElement::getId).collect(toList());
-        backend.dequeue(Integer.MAX_VALUE, false);
+        backend.dequeueForProcessing(Integer.MAX_VALUE, false);
         printState();
         assertEquals(2, backend.markFailed(ids));
 
@@ -136,23 +143,23 @@ public class RedisQueueBackendTest {
     public void testCollectGarbage() throws Exception {
         printState();
 
-        List<RedisQueueElement> enqueueResult = backend.enqueue("test-1", "test-2");
+        List<StringQueueElement> enqueueResult = backend.enqueueNewElements("test-1", "test-2");
         List<String> ids = enqueueResult.stream().map(QueueElement::getId).collect(toList());
 
-        assertEquals(2, backend.dequeue(Integer.MAX_VALUE, false).size());
+        assertEquals(2, backend.dequeueForProcessing(Integer.MAX_VALUE, false).size());
         assertEquals(2, backend.markFailed(ids));
 
-        assertEquals(2, backend.dequeue(Integer.MAX_VALUE, false).size());
+        assertEquals(2, backend.dequeueForProcessing(Integer.MAX_VALUE, false).size());
         assertEquals(2, backend.markFailed(ids));
 
-        assertEquals(2, backend.dequeue(Integer.MAX_VALUE, false).size());
+        assertEquals(2, backend.dequeueForProcessing(Integer.MAX_VALUE, false).size());
         assertEquals(2, backend.markFailed(ids));
 
-        assertEquals(0, backend.dequeue(Integer.MAX_VALUE, false).size());
+        assertEquals(0, backend.dequeueForProcessing(Integer.MAX_VALUE, false).size());
 
         printState();
 
-        List<RedisQueueElement> garbage = backend.collectGarbage(m -> true, Integer.MAX_VALUE, Integer.MAX_VALUE);
+        List<StringQueueElement> garbage = backend.removeFailedElements(m -> true, Integer.MAX_VALUE, Integer.MAX_VALUE);
         assertEquals(2, garbage.size());
         assertEquals(ids.get(0), garbage.get(0).getId());
         assertEquals(ids.get(1), garbage.get(1).getId());
@@ -164,21 +171,21 @@ public class RedisQueueBackendTest {
     public void testCleanup() throws Exception {
         printState();
 
-        List<RedisQueueElement> enqueueResult = backend.enqueue("test-1", "test-2");
+        List<StringQueueElement> enqueueResult = backend.enqueueNewElements("test-1", "test-2");
         List<String> ids = enqueueResult.stream().map(QueueElement::getId).collect(toList());
 
-        assertEquals(2, backend.dequeue(Integer.MAX_VALUE, false).size());
+        assertEquals(2, backend.dequeueForProcessing(Integer.MAX_VALUE, false).size());
 
         printState();
 
-        List<RedisQueueElement> cleanupResult = backend.cleanup(CleanupAction.REQUEUE, m -> true);
+        List<StringQueueElement> cleanupResult = backend.cleanup(CleanupAction.REQUEUE, m -> true);
         assertEquals(2, cleanupResult.size());
         assertEquals(ids.get(0), cleanupResult.get(0).getId());
         assertEquals(ids.get(1), cleanupResult.get(1).getId());
 
         printState();
 
-        assertEquals(2, backend.dequeue(Integer.MAX_VALUE, false).size());
+        assertEquals(2, backend.dequeueForProcessing(Integer.MAX_VALUE, false).size());
 
         printState();
     }

@@ -12,7 +12,7 @@ public interface Backend<I, E, M, QE extends QueueElement<I, E, M>> {
      * @param elements elements to put
      * @return list of added elements wrapped into {@link QueueElement}
      */
-    List<QE> enqueue(List<E> elements) throws Exception;
+    List<QE> enqueueNewElements(List<E> elements) throws Exception;
 
     /**
      * Put <code>elements</code> to the queue.
@@ -20,7 +20,7 @@ public interface Backend<I, E, M, QE extends QueueElement<I, E, M>> {
      * @param elements elements to put
      * @return list of added elements wrapped into {@link QueueElement}
      */
-    List<QE> enqueue(E... elements) throws Exception;
+    List<QE> enqueueNewElements(E... elements) throws Exception;
 
     /**
      * Takes <code>count</code> elements from the queue.
@@ -29,7 +29,7 @@ public interface Backend<I, E, M, QE extends QueueElement<I, E, M>> {
      * @param blocking wait until some data
      * @return list of dequeued elements wrapped into {@link QueueElement}
      */
-    List<QE> dequeue(long count, boolean blocking) throws Exception;
+    List<QE> dequeueForProcessing(long count, boolean blocking) throws Exception;
 
     /**
      * Mark elements as processed.
@@ -53,7 +53,7 @@ public interface Backend<I, E, M, QE extends QueueElement<I, E, M>> {
      * @param limit elements count to return
      * @return last elements.
      */
-    List<QE> peek(long limit) throws Exception;
+    List<QE> peekUnprocessedElements(long limit) throws Exception;
 
     /**
      * Removes busy expired items.
@@ -67,8 +67,8 @@ public interface Backend<I, E, M, QE extends QueueElement<I, E, M>> {
      * @return payoads of failed items
      * TODO: fix javadoc
      */
-    List<QE> collectGarbage(Predicate<QE> filter,
-                            int chunk, int logLimit) throws Exception;
+    List<QE> removeFailedElements(Predicate<QE> filter,
+                                  int chunk, int logLimit) throws Exception;
 
     /**
      * Deletes everything in the queue

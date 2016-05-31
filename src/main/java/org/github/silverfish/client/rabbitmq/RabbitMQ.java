@@ -59,7 +59,7 @@ public class RabbitMQ implements Backend<Long, byte[], Void, QueueElement<Long, 
     }
 
     @Override
-    public List<QueueElement<Long, byte[], Void>> enqueue(final List<byte[]> items) throws IOException {
+    public List<QueueElement<Long, byte[], Void>> enqueueNewElements(final List<byte[]> items) throws IOException {
         if (items == null || items.isEmpty()) {
             return Collections.emptyList();
         }
@@ -75,12 +75,12 @@ public class RabbitMQ implements Backend<Long, byte[], Void, QueueElement<Long, 
     }
 
     @Override
-    public List<QueueElement<Long, byte[], Void>> enqueue(byte[]... elements) throws Exception {
-        return enqueue(Arrays.asList(elements));
+    public List<QueueElement<Long, byte[], Void>> enqueueNewElements(byte[]... elements) throws Exception {
+        return enqueueNewElements(Arrays.asList(elements));
     }
 
     @Override
-    public List<QueueElement<Long, byte[], Void>> dequeue(long count, boolean blocking) throws IOException, InterruptedException {
+    public List<QueueElement<Long, byte[], Void>> dequeueForProcessing(long count, boolean blocking) throws IOException, InterruptedException {
         final List<QueueElement<Long, byte[], Void>> result = new ArrayList<>();
 
         int timeSpent = 0;
@@ -156,8 +156,8 @@ public class RabbitMQ implements Backend<Long, byte[], Void, QueueElement<Long, 
     }
 
     @Override
-    public List<QueueElement<Long, byte[], Void>> peek(long limit) {
-        throw new UnsupportedOperationException("Sorry, RabbitMQ cannot peek");
+    public List<QueueElement<Long, byte[], Void>> peekUnprocessedElements(long limit) {
+        throw new UnsupportedOperationException("Sorry, RabbitMQ cannot peekUnprocessedElements");
     }
 
     @Override
@@ -167,8 +167,8 @@ public class RabbitMQ implements Backend<Long, byte[], Void, QueueElement<Long, 
     }
 
     @Override
-    public List<QueueElement<Long, byte[], Void>> collectGarbage(Predicate<QueueElement<Long, byte[], Void>> filter,
-                                                                 int chunk, int logLimit) throws Exception {
+    public List<QueueElement<Long, byte[], Void>> removeFailedElements(Predicate<QueueElement<Long, byte[], Void>> filter,
+                                                                       int chunk, int logLimit) throws Exception {
         return null;
     }
 
