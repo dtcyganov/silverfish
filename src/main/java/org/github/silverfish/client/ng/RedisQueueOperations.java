@@ -1,7 +1,7 @@
 package org.github.silverfish.client.ng;
 
 import com.google.common.collect.Lists;
-import org.github.silverfish.client.impl.StringQueueElement;
+import org.github.silverfish.client.impl.ByteArrayQueueElement;
 import redis.clients.jedis.Jedis;
 
 import java.util.ArrayList;
@@ -11,6 +11,8 @@ import java.util.Map;
 import java.util.concurrent.Callable;
 
 import static java.util.stream.Collectors.toList;
+import static org.github.silverfish.client.ng.Util.bytesToString;
+import static org.github.silverfish.client.ng.Util.getBytes;
 import static org.github.silverfish.client.ng.ValidityUtils.*;
 
 public class RedisQueueOperations {
@@ -44,21 +46,21 @@ public class RedisQueueOperations {
         this.soTimeout = soTimeout;
     }
 
-    public void register(List<StringQueueElement> elements) {
+    public void register(List<ByteArrayQueueElement> elements) {
         assureNotNull(elements);
         if (elements.isEmpty()) {
             return;
         }
 
         try (Jedis rh = getJedis()) {
-            for (StringQueueElement e : elements) {
+            for (ByteArrayQueueElement e : elements) {
                 String id = e.getId();
                 String key = idToKey(id);
-                Long result = rh.setnx(itemKey(key), e.getElement());
+                Long result = rh.setnx(getBytes(itemKey(key)), e.getElement());
                 if (result == null || result == 0) {
                     throw new IllegalStateException(String.format("Id '%s' already exists", id));
                 }
-                rh.hmset(metaKey(key), e.getMetadata().toMap());
+                rh.hmset(getBytes(metaKey(key)), e.getMetadata().toBytesMap());
             }
         }
     }
@@ -69,12 +71,12 @@ public class RedisQueueOperations {
             return;
         }
 
-        try (Jedis jedis = getJedis()) {
+        try (Jedis rh = getJedis()) {
             for (List<String> part : Lists.partition(idsToKeys(ids), DELETE_CHUNK_SIZE)) {
-                String[] metaKeysChunk = part.stream().map(this::metaKey).toArray(String[]::new);
-                String[] dataKeysChunk = part.stream().map(this::itemKey).toArray(String[]::new);
-                jedis.del(metaKeysChunk);
-                jedis.del(dataKeysChunk);
+                byte[][] metaKeysChunk = part.stream().map(this::metaKey).map(Util::getBytes).toArray(byte[][]::new);
+                byte[][] dataKeysChunk = part.stream().map(this::itemKey).map(Util::getBytes).toArray(byte[][]::new);
+                rh.del(metaKeysChunk);
+                rh.del(dataKeysChunk);
             }
         }
     }
@@ -89,7 +91,7 @@ public class RedisQueueOperations {
         try (Jedis rh = getJedis()) {
             for (String id : ids) {
                 String key = idToKey(id);
-                Long result = rh.lpush(innerQueueName(queueName), key);
+                Long result = rh.lpush(getBytes(innerQueueName(queueName)), getBytes(key));
                 if (result == null || result == 0) {
                     throw new RuntimeException(String.format(
                             "Failed to lpush() item_key: '%s' onto the queue '%s'",
@@ -116,10 +118,11 @@ public class RedisQueueOperations {
             long start = System.currentTimeMillis();
             int moved;
             for (moved = 0; moved < count; moved++) {
-                String key = rh.rpoplpush(innerQueueName(sourceQueueName),
-                        innerQueueName(destQueueName));
+                byte[] key = rh.rpoplpush(
+                        getBytes(innerQueueName(sourceQueueName)),
+                        getBytes(innerQueueName(destQueueName)));
                 if (key != null) {
-                    ids.add(keyToId(key));
+                    ids.add(keyToId(bytesToString(key)));
                 } else {
                     break;
                 }
@@ -131,12 +134,14 @@ public class RedisQueueOperations {
                     if (operationTimeout < 0) {
                         break;
                     }
-                    String key = rh.brpoplpush(innerQueueName(sourceQueueName),
-                            innerQueueName(destQueueName), operationTimeout);
+                    byte[] key = rh.brpoplpush(
+                            getBytes(innerQueueName(sourceQueueName)),
+                            getBytes(innerQueueName(destQueueName)),
+                            operationTimeout);
                     if (key == null) {
                         break;
                     }
-                    ids.add(keyToId(key));
+                    ids.add(keyToId(bytesToString(key)));
                     moved++;
                 }
             }
@@ -151,9 +156,9 @@ public class RedisQueueOperations {
             return Collections.emptyList();
         }
 
-        try (Jedis jedis = getJedis()) {
+        try (Jedis rh = getJedis()) {
             return ids.stream().filter(id -> {
-                Long result = jedis.lrem(innerQueueName(queueName), 1, idToKey(id));
+                Long result = rh.lrem(getBytes(innerQueueName(queueName)), 1, getBytes(idToKey(id)));
                 return result != null && result > 0;
             }).collect(toList());
         }
@@ -175,9 +180,9 @@ public class RedisQueueOperations {
             long start = System.currentTimeMillis();
             int moved;
             for (moved = 0; moved < count; moved++) {
-                String key = rh.rpop(innerQueueName(queueName));
+                byte[] key = rh.rpop(getBytes(innerQueueName(queueName)));
                 if (key != null) {
-                    ids.add(keyToId(key));
+                    ids.add(keyToId(bytesToString(key)));
                 } else {
                     break;
                 }
@@ -189,11 +194,11 @@ public class RedisQueueOperations {
                     if (operationTimeout < 0) {
                         break;
                     }
-                    List<String> key = rh.brpop(operationTimeout, innerQueueName(queueName));
+                    List<byte[]> key = rh.brpop(operationTimeout, getBytes(innerQueueName(queueName)));
                     if (key == null || key.isEmpty()) {
                         break;
                     }
-                    ids.add(keyToId(key.get(0)));
+                    ids.add(keyToId(bytesToString(key.get(0))));
                     moved++;
                 }
             }
@@ -209,8 +214,8 @@ public class RedisQueueOperations {
 
     public List<String> peek(String queueName, long numberOfItems) {
         try (Jedis rh = getJedis()) {
-            return rh.lrange(innerQueueName(queueName), -numberOfItems, -1).stream().
-                    map(this::keyToId).collect(toList());
+            return rh.lrange(getBytes(innerQueueName(queueName)), -numberOfItems, -1).stream().
+                    map(Util::bytesToString).map(this::keyToId).collect(toList());
         }
     }
 
@@ -220,19 +225,19 @@ public class RedisQueueOperations {
 
     public Long deleteQueue(String queueName) {
         try (Jedis rh = getJedis()) {
-            return rh.del(innerQueueName(queueName));
+            return rh.del(getBytes(innerQueueName(queueName)));
         }
     }
 
     public long incrementMetadataCounter(String id, String field, long value) {
         try (Jedis rh = getJedis()) {
-            return rh.hincrBy(metaKey(idToKey(id)), field, value);
+            return rh.hincrBy(getBytes(metaKey(idToKey(id))), getBytes(field), value);
         }
     }
 
     public long setMetadataCounter(String id, String field, long value) {
         try (Jedis rh = getJedis()) {
-            return rh.hset(metaKey(idToKey(id)), field, String.valueOf(value));
+            return rh.hset(getBytes(metaKey(idToKey(id))), getBytes(field), getBytes(String.valueOf(value)));
         }
     }
 
@@ -254,9 +259,9 @@ public class RedisQueueOperations {
         }
     }
 
-    public String getPayloadById(String id) {
+    public byte[] getPayloadById(String id) {
         try (Jedis rh = getJedis()) {
-            String payload = rh.get(itemKey(idToKey(id)));
+            byte[] payload = rh.get(getBytes(itemKey(idToKey(id))));
             if (payload == null) {
                 throw new IllegalStateException(String.format(
                         "Found item_key: '%s' but not its key! This should never happen!", id));
@@ -267,17 +272,17 @@ public class RedisQueueOperations {
 
     public Metadata getMetadataById(String id) {
         try (Jedis rh = getJedis()) {
-            Map<String, String> metadata = rh.hgetAll(metaKey(idToKey(id)));
+            Map<byte[], byte[]> metadata = rh.hgetAll(getBytes(metaKey(idToKey(id))));
             if (metadata == null) {
                 throw new IllegalStateException(String.format(
                         "Found item_key: '%s' but not its metadata! This should never happen!", id));
             }
-            return new Metadata(metadata);
+            return new Metadata(Metadata.toStringMap(metadata));
         }
     }
 
-    public StringQueueElement getItemById(String id) {
-        return new StringQueueElement(
+    public ByteArrayQueueElement getItemById(String id) {
+        return new ByteArrayQueueElement(
                 id,
                 getPayloadById(id),
                 getMetadataById(id)

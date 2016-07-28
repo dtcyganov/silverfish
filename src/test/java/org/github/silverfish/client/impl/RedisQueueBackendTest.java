@@ -1,9 +1,13 @@
 package org.github.silverfish.client.impl;
 
+import org.github.silverfish.client.Backend;
 import org.github.silverfish.client.CleanupAction;
 import org.github.silverfish.client.QueueElement;
-import org.github.silverfish.client.ng.RedisQueueOperations;
+import org.github.silverfish.client.ng.Metadata;
 import org.github.silverfish.client.ng.RedisQueueBackend2;
+import org.github.silverfish.client.ng.RedisQueueOperations;
+import org.github.silverfish.client.ng.Util;
+import org.github.silverfish.client.wrappers.GenericQueueBackendAdapter;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -12,27 +16,32 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.TreeMap;
 
+import static java.util.function.Function.identity;
 import static java.util.stream.Collectors.toList;
 import static org.junit.Assert.assertEquals;
 
 public class RedisQueueBackendTest {
 
-//    private RedisQueueBackend backend;
-    private RedisQueueBackend2 backend;
+    private Backend<String, String, Metadata, StringQueueElement> backend;
     private Process redisProcess;
 
     @Before
     public void setUp() throws Exception {
         redisProcess = new ProcessBuilder("redis-server",  "--port", "6389").start();
-//        backend = new RedisQueueBackend(
-//                new UUIDSupplier(),
-//                new StatsMetadataSupplier(),
-//                "localhost", 6389,
-//                "test");
-        backend = new RedisQueueBackend2(
-                new RedisQueueOperations("localhost", 6389, "test"),
-                new UUIDSupplier(),
-                new StatsMetadataSupplier());
+        backend = new GenericQueueBackendAdapter<>(
+                new RedisQueueBackend2(
+                        new RedisQueueOperations("localhost", 6389, "test"),
+                        new UUIDSupplier(),
+                        new StatsMetadataSupplier()),
+                Util::getBytes,
+                Util::bytesToString,
+                identity(),
+                identity(),
+                identity(),
+                identity(),
+                StringQueueElement::new
+        );
+
         Thread.sleep(100);
     }
 
@@ -54,11 +63,11 @@ public class RedisQueueBackendTest {
         List<StringQueueElement> peekResult = backend.peekUnprocessedElements(Integer.MAX_VALUE);
         assertEquals(2, peekResult.size());
 
-        assertEquals("test-1", peekResult.get(0).getElement());
-        assertEquals("test-2", peekResult.get(1).getElement());
+        assertEquals("test-2", peekResult.get(0).getElement());
+        assertEquals("test-1", peekResult.get(1).getElement());
 
-        assertEquals(enqueueResult.get(0).getId(), peekResult.get(0).getId());
-        assertEquals(enqueueResult.get(1).getId(), peekResult.get(1).getId());
+        assertEquals(enqueueResult.get(0).getId(), peekResult.get(1).getId());
+        assertEquals(enqueueResult.get(1).getId(), peekResult.get(0).getId());
 
         printState();
     }

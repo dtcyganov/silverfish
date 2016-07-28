@@ -186,4 +186,9 @@ public class RabbitMQ implements Backend<Long, byte[], Void, QueueElement<Long, 
     public Map<String, Long> stats() throws IOException {
         return mqConnection.stats();
     }
+
+    @Override
+    public Map<String, List<QueueElement<Long, byte[], Void>>> getState() {
+        throw new UnsupportedOperationException();
+    }
 }

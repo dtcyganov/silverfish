@@ -88,4 +88,12 @@ public interface Backend<I, E, M, QE extends QueueElement<I, E, M>> {
      * @return stats of the queue (how many elements are in each state)
      */
     Map<String, Long> stats() throws Exception;
+
+    /**
+     * Returns content of all subqueues in the system.
+     * Use for debugging on small datasets.
+     *
+     * @return content of all subqueues in the system.
+     */
+    Map<String, List<QE>> getState();
 }

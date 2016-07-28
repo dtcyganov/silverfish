@@ -4,7 +4,7 @@ import com.google.common.collect.Lists;
 import org.github.silverfish.client.Backend;
 import org.github.silverfish.client.CleanupAction;
 import org.github.silverfish.client.QueueElement;
-import org.github.silverfish.client.impl.StringQueueElement;
+import org.github.silverfish.client.impl.ByteArrayQueueElement;
 
 import java.util.List;
 import java.util.Map;
@@ -17,7 +17,7 @@ import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 import static org.github.silverfish.client.ng.ValidityUtils.*;
 
-public class RedisQueueBackend2 implements Backend<String, String, Metadata, StringQueueElement> {
+public class RedisQueueBackend2 implements Backend<String, byte[], Metadata, ByteArrayQueueElement> {
 
     private static final int DEFAULT_CLAIM_WAIT_TIMEOUT = 30_000;
     private static final int DEFAULT_REQUEUE_LIMIT = 5;
@@ -58,11 +58,11 @@ public class RedisQueueBackend2 implements Backend<String, String, Metadata, Str
     }
 
     @Override
-    public List<StringQueueElement> enqueueNewElements(List<String> elements) {
+    public List<ByteArrayQueueElement> enqueueNewElements(List<byte[]> elements) {
         assureNotEmptyAndWithoutNulls(elements);
 
-        List<StringQueueElement> result = elements.stream().map(
-                e -> new StringQueueElement(idSupplier.get(), e, metadataSupplier.get())
+        List<ByteArrayQueueElement> result = elements.stream().map(
+                e -> new ByteArrayQueueElement(idSupplier.get(), e, metadataSupplier.get())
         ).collect(toList());
 
         redis.doInOneConnection(() -> {
@@ -73,12 +73,12 @@ public class RedisQueueBackend2 implements Backend<String, String, Metadata, Str
     }
 
     @Override
-    public List<StringQueueElement> enqueueNewElements(String... elements) throws Exception {
+    public List<ByteArrayQueueElement> enqueueNewElements(byte[]... elements) throws Exception {
         return enqueueNewElements(asList(elements));
     }
 
     @Override
-    public List<StringQueueElement> dequeueForProcessing(final long count, final boolean blocking) {
+    public List<ByteArrayQueueElement> dequeueForProcessing(final long count, final boolean blocking) {
         assurePositive(count);
 
         return redis.doInOneConnection(() -> {
@@ -107,7 +107,7 @@ public class RedisQueueBackend2 implements Backend<String, String, Metadata, Str
     }
 
     @Override
-    public List<StringQueueElement> peekUnprocessedElements(long limit) {
+    public List<ByteArrayQueueElement> peekUnprocessedElements(long limit) {
         assurePositive(limit);
 
         return redis.doInOneConnection(() -> {
@@ -117,7 +117,7 @@ public class RedisQueueBackend2 implements Backend<String, String, Metadata, Str
     }
 
     @Override
-    public List<StringQueueElement> cleanup(CleanupAction cleanupAction,
+    public List<ByteArrayQueueElement> cleanup(CleanupAction cleanupAction,
                                             Predicate<Metadata> filter) {
         assureNotNull(cleanupAction);
         assureNotNull(filter);
@@ -129,7 +129,7 @@ public class RedisQueueBackend2 implements Backend<String, String, Metadata, Str
 
             if (cleanupAction == CleanupAction.DROP) {
                 List<String> removedIds = redis.dequeue(WORKING_QUEUE, itemsToCleanUp);
-                List<StringQueueElement> result = removedIds.stream().map(redis::getItemById).collect(toList());
+                List<ByteArrayQueueElement> result = removedIds.stream().map(redis::getItemById).collect(toList());
                 redis.unregister(itemsToCleanUp);
                 return result;
             }
@@ -141,7 +141,7 @@ public class RedisQueueBackend2 implements Backend<String, String, Metadata, Str
     }
 
     @Override
-    public List<StringQueueElement> removeFailedElements(Predicate<StringQueueElement> filter,
+    public List<ByteArrayQueueElement> removeFailedElements(Predicate<ByteArrayQueueElement> filter,
                                                          int chunk, int logLimit) {
         assureNotNull(filter);
         assurePositive(chunk);
@@ -152,7 +152,7 @@ public class RedisQueueBackend2 implements Backend<String, String, Metadata, Str
             redis.requeue(FAILED_QUEUE, tempQueue, chunk);
             List<String> ids = redis.dequeue(tempQueue, Long.MAX_VALUE);
             List<String> idsToRemove = ids.stream().filter(id -> filter.test(redis.getItemById(id))).collect(toList());
-            List<StringQueueElement> logItems = idsToRemove.stream().limit(logLimit).map(redis::getItemById).collect(toList());
+            List<ByteArrayQueueElement> logItems = idsToRemove.stream().limit(logLimit).map(redis::getItemById).collect(toList());
             ids.removeAll(idsToRemove);
             redis.unregister(idsToRemove);
             redis.enqueue(FAILED_QUEUE, ids);
@@ -203,13 +203,14 @@ public class RedisQueueBackend2 implements Backend<String, String, Metadata, Str
         });
     }
 
-    public Map<String, List<StringQueueElement>> getState() {
+    @Override
+    public Map<String, List<ByteArrayQueueElement>> getState() {
         return redis.doInOneConnection(() ->
                 getAllQueues().stream().collect(toMap(q -> q, q -> getRawItems(q, Integer.MAX_VALUE)))
         );
     }
 
-    private List<StringQueueElement> getRawItems(String queueName, long numberOfItems) {
+    private List<ByteArrayQueueElement> getRawItems(String queueName, long numberOfItems) {
         assurePositive(numberOfItems);
 
         return redis.doInOneConnection(() -> redis.peek(queueName, numberOfItems).

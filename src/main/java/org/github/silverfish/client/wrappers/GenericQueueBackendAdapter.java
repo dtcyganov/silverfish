@@ -5,15 +5,15 @@ import org.github.silverfish.client.CleanupAction;
 import org.github.silverfish.client.QueueElement;
 
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.toList;
 
-public class GenericQueueBackendAdapter<I, E, M, BI, BE, BM> implements Backend<I, E, M, QueueElement<I, E, M>> {
+public class GenericQueueBackendAdapter<I, E, M, QE extends QueueElement<I, E, M>, BI, BE, BM> implements Backend<I, E, M, QE> {
 
     private final Backend<BI, BE, BM, ? extends QueueElement<BI, BE, BM>> backend;
 
@@ -26,13 +26,16 @@ public class GenericQueueBackendAdapter<I, E, M, BI, BE, BM> implements Backend<
     private final Function<M, BM> metadataSerializer;
     private final Function<BM, M> metadataDeserializer;
 
+    private final QueueElementCreator<I, E, M, QE> queueElementCreator;
+
     public GenericQueueBackendAdapter(Backend<BI, BE, BM, ? extends QueueElement<BI, BE, BM>> backend,
                                       Function<E, BE> elementSerializer,
                                       Function<BE, E> elementDeserializer,
                                       Function<I, BI> idSerializer,
                                       Function<BI, I> idDeserializer,
                                       Function<M, BM> metadataSerializer,
-                                      Function<BM, M> metadataDeserializer) {
+                                      Function<BM, M> metadataDeserializer,
+                                      QueueElementCreator<I, E, M, QE> queueElementCreator) {
 
         this.backend = backend;
         this.elementSerializer = elementSerializer;
@@ -41,22 +44,23 @@ public class GenericQueueBackendAdapter<I, E, M, BI, BE, BM> implements Backend<
         this.idDeserializer = idDeserializer;
         this.metadataSerializer = metadataSerializer;
         this.metadataDeserializer = metadataDeserializer;
+        this.queueElementCreator = queueElementCreator;
     }
 
     @Override
-    public List<QueueElement<I, E, M>> enqueueNewElements(List<E> items) throws Exception {
+    public List<QE> enqueueNewElements(List<E> items) throws Exception {
         List<BE> serializedItems = items.stream().map(elementSerializer::apply).collect(toList());
         return deserializeQueueElements(backend.enqueueNewElements(serializedItems));
     }
 
     @SafeVarargs
     @Override
-    public final List<QueueElement<I, E, M>> enqueueNewElements(E... elements) throws Exception {
+    public final List<QE> enqueueNewElements(E... elements) throws Exception {
         return enqueueNewElements(Arrays.asList(elements));
     }
 
     @Override
-    public List<QueueElement<I, E, M>> dequeueForProcessing(long count, boolean blocking) throws Exception {
+    public List<QE> dequeueForProcessing(long count, boolean blocking) throws Exception {
         return deserializeQueueElements(backend.dequeueForProcessing(count, blocking));
     }
 
@@ -71,17 +75,17 @@ public class GenericQueueBackendAdapter<I, E, M, BI, BE, BM> implements Backend<
     }
 
     @Override
-    public List<QueueElement<I, E, M>> peekUnprocessedElements(long limit) throws Exception {
+    public List<QE> peekUnprocessedElements(long limit) throws Exception {
         return deserializeQueueElements(backend.peekUnprocessedElements(limit));
     }
 
     @Override
-    public List<QueueElement<I, E, M>> cleanup(CleanupAction cleanupAction, Predicate<M> condition) throws Exception {
+    public List<QE> cleanup(CleanupAction cleanupAction, Predicate<M> condition) throws Exception {
         return deserializeQueueElements(backend.cleanup(cleanupAction, bm -> condition.test(metadataDeserializer.apply(bm))));
     }
 
     @Override
-    public List<QueueElement<I, E, M>> removeFailedElements(Predicate<QueueElement<I, E, M>> filter, int chunk, int logLimit) throws Exception {
+    public List<QE> removeFailedElements(Predicate<QE> filter, int chunk, int logLimit) throws Exception {
         return deserializeQueueElements(backend.removeFailedElements(
                 e -> filter.test(deserializeQueueElement(e)),
                 chunk, logLimit
@@ -103,15 +107,27 @@ public class GenericQueueBackendAdapter<I, E, M, BI, BE, BM> implements Backend<
         return backend.stats();
     }
 
-    private QueueElement<I, E, M> deserializeQueueElement(QueueElement<BI, BE, BM> e) {
+    @Override
+    public Map<String, List<QE>> getState() {
+        Map<String, List<QE>> result = new LinkedHashMap<>();
+        backend.getState().forEach((queueName, queueElements) ->
+                result.put(
+                        queueName,
+                        queueElements.stream().map(this::deserializeQueueElement).collect(toList())
+                )
+        );
+        return result;
+    }
+
+    private QE deserializeQueueElement(QueueElement<BI, BE, BM> e) {
         I id = idDeserializer.apply(e.getId());
         E element = elementDeserializer.apply(e.getElement());
         M metadata = metadataDeserializer.apply(e.getMetadata());
-        return new QueueElement<>(id, element, metadata);
+        return queueElementCreator.create(id, element, metadata);
     }
 
-    private List<QueueElement<I, E, M>> deserializeQueueElements(List<? extends QueueElement<BI, BE, BM>> elements) {
-        return elements.stream().map(this::deserializeQueueElement).collect(Collectors.toList());
+    private List<QE> deserializeQueueElements(List<? extends QueueElement<BI, BE, BM>> elements) {
+        return elements.stream().map(this::deserializeQueueElement).collect(toList());
     }
 
     private List<BI> serializeIds(List<I> ids) {

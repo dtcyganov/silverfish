@@ -9,12 +9,13 @@ public class Queues {
     private Queues() {}
 
     public static <E> Backend<Long, E, Void, QueueElement<Long, E, Void>> createGenericRabbitMQ(RabbitMQ rabbitMQ) {
-        return new GenericQueueBackendAdapter<Long, E, Void, Long, byte[], Void>(rabbitMQ,
+        return new GenericQueueBackendAdapter<Long, E, Void, QueueElement<Long, E, Void>, Long, byte[], Void>(rabbitMQ,
                 Serializers.<E>createPlainJavaSerializer(),
                 Serializers.<E>createPlainJavaDeserializer(),
                 identity(),
                 identity(),
                 identity(),
-                identity());
+                identity(),
+                QueueElement::new);
     }
 }
