@@ -1,7 +1,9 @@
-package org.github.silverfish.client.ng;
+package org.github.silverfish.client.redis;
 
 import com.google.common.collect.Lists;
 import org.github.silverfish.client.impl.ByteArrayQueueElement;
+import org.github.silverfish.client.impl.Metadata;
+import org.github.silverfish.client.util.Util;
 import redis.clients.jedis.Jedis;
 
 import java.util.ArrayList;
@@ -11,9 +13,9 @@ import java.util.Map;
 import java.util.concurrent.Callable;
 
 import static java.util.stream.Collectors.toList;
-import static org.github.silverfish.client.ng.Util.bytesToString;
-import static org.github.silverfish.client.ng.Util.getBytes;
-import static org.github.silverfish.client.ng.ValidityUtils.*;
+import static org.github.silverfish.client.util.Util.bytesToString;
+import static org.github.silverfish.client.util.Util.getBytes;
+import static org.github.silverfish.client.util.ValidityUtils.*;
 
 public class RedisQueueOperations {
 

@@ -1,11 +1,12 @@
-package org.github.silverfish.client.ng;
+package org.github.silverfish.client.impl;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.TreeMap;
 
-import static org.github.silverfish.client.ng.Util.bytesToString;
-import static org.github.silverfish.client.ng.Util.getBytes;
+import static org.github.silverfish.client.util.Util.bytesToString;
+import static org.github.silverfish.client.util.Util.getBytes;
 
 public class Metadata {
 
@@ -32,6 +33,11 @@ public class Metadata {
         Map<byte[], byte[]> result = new HashMap<>();
         content.forEach((k, v) -> result.put(getBytes(k), getBytes(v)));
         return result;
+    }
+
+    @Override
+    public String toString() {
+        return "{" + new TreeMap<>(content) + "}";
     }
 
     public static Map<String, String> toStringMap(Map<byte[], byte[]> m) {

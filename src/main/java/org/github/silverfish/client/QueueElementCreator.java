@@ -1,6 +1,4 @@
-package org.github.silverfish.client.wrappers;
-
-import org.github.silverfish.client.QueueElement;
+package org.github.silverfish.client;
 
 @FunctionalInterface
 public interface QueueElementCreator<I, E, M, QE extends QueueElement<I, E, M>> {

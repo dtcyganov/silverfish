@@ -1,8 +1,4 @@
-package org.github.silverfish.client.wrappers;
-
-import org.github.silverfish.client.Backend;
-import org.github.silverfish.client.CleanupAction;
-import org.github.silverfish.client.QueueElement;
+package org.github.silverfish.client;
 
 import java.util.Arrays;
 import java.util.LinkedHashMap;

@@ -1,7 +1,6 @@
 package org.github.silverfish.client.impl;
 
 import org.github.silverfish.client.QueueElement;
-import org.github.silverfish.client.ng.Metadata;
 
 public class StringQueueElement extends QueueElement<String, String, Metadata> {
 

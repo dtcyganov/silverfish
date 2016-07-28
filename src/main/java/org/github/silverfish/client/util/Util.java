@@ -1,4 +1,4 @@
-package org.github.silverfish.client.ng;
+package org.github.silverfish.client.util;
 
 public class Util {
 

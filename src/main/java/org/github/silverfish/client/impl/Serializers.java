@@ -1,4 +1,4 @@
-package org.github.silverfish.client;
+package org.github.silverfish.client.impl;
 
 import java.io.*;
 import java.util.function.Function;
@@ -19,6 +19,7 @@ public class Serializers {
         };
     }
 
+    @SuppressWarnings("unchecked")
     public static <E> Function<byte[], E> createPlainJavaDeserializer() {
         return data -> {
             try (ByteArrayInputStream bis = new ByteArrayInputStream(data);

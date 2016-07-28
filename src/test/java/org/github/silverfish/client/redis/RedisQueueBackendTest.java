@@ -1,13 +1,14 @@
-package org.github.silverfish.client.impl;
+package org.github.silverfish.client.redis;
 
 import org.github.silverfish.client.Backend;
 import org.github.silverfish.client.CleanupAction;
+import org.github.silverfish.client.GenericQueueBackendAdapter;
 import org.github.silverfish.client.QueueElement;
-import org.github.silverfish.client.ng.Metadata;
-import org.github.silverfish.client.ng.RedisQueueBackend2;
-import org.github.silverfish.client.ng.RedisQueueOperations;
-import org.github.silverfish.client.ng.Util;
-import org.github.silverfish.client.wrappers.GenericQueueBackendAdapter;
+import org.github.silverfish.client.impl.Metadata;
+import org.github.silverfish.client.impl.StatsMetadataSupplier;
+import org.github.silverfish.client.impl.StringQueueElement;
+import org.github.silverfish.client.impl.UUIDSupplier;
+import org.github.silverfish.client.util.Util;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -29,7 +30,7 @@ public class RedisQueueBackendTest {
     public void setUp() throws Exception {
         redisProcess = new ProcessBuilder("redis-server",  "--port", "6389").start();
         backend = new GenericQueueBackendAdapter<>(
-                new RedisQueueBackend2(
+                new RedisQueueBackend(
                         new RedisQueueOperations("localhost", 6389, "test"),
                         new UUIDSupplier(),
                         new StatsMetadataSupplier()),

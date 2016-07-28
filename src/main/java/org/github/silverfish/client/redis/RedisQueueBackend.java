@@ -1,10 +1,11 @@
-package org.github.silverfish.client.ng;
+package org.github.silverfish.client.redis;
 
 import com.google.common.collect.Lists;
 import org.github.silverfish.client.Backend;
 import org.github.silverfish.client.CleanupAction;
 import org.github.silverfish.client.QueueElement;
 import org.github.silverfish.client.impl.ByteArrayQueueElement;
+import org.github.silverfish.client.impl.Metadata;
 
 import java.util.List;
 import java.util.Map;
@@ -15,9 +16,9 @@ import java.util.function.Supplier;
 import static java.util.Arrays.asList;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
-import static org.github.silverfish.client.ng.ValidityUtils.*;
+import static org.github.silverfish.client.util.ValidityUtils.*;
 
-public class RedisQueueBackend2 implements Backend<String, byte[], Metadata, ByteArrayQueueElement> {
+public class RedisQueueBackend implements Backend<String, byte[], Metadata, ByteArrayQueueElement> {
 
     private static final int DEFAULT_CLAIM_WAIT_TIMEOUT = 30_000;
     private static final int DEFAULT_REQUEUE_LIMIT = 5;
@@ -39,16 +40,16 @@ public class RedisQueueBackend2 implements Backend<String, byte[], Metadata, Byt
 
     private final RedisQueueOperations redis;
 
-    public RedisQueueBackend2(RedisQueueOperations redis,
-                              Supplier<String> idSupplier, Supplier<Metadata> metadataSupplier) {
+    public RedisQueueBackend(RedisQueueOperations redis,
+                             Supplier<String> idSupplier, Supplier<Metadata> metadataSupplier) {
 
         this(redis, idSupplier, metadataSupplier,
                 DEFAULT_CLAIM_WAIT_TIMEOUT, DEFAULT_REQUEUE_LIMIT);
     }
 
-    public RedisQueueBackend2(RedisQueueOperations redis,
-                              Supplier<String> idSupplier, Supplier<Metadata> metadataSupplier,
-                              int claimWaitTimeout, int requeueLimit) {
+    public RedisQueueBackend(RedisQueueOperations redis,
+                             Supplier<String> idSupplier, Supplier<Metadata> metadataSupplier,
+                             int claimWaitTimeout, int requeueLimit) {
 
         this.redis = redis;
         this.idSupplier = idSupplier;
