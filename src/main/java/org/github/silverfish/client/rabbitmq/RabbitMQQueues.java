@@ -4,7 +4,6 @@ import org.github.silverfish.client.Backend;
 import org.github.silverfish.client.GenericQueueBackendAdapter;
 import org.github.silverfish.client.QueueElement;
 import org.github.silverfish.client.impl.Serializers;
-import org.github.silverfish.client.rabbitmq.RabbitMQ;
 
 import static java.util.function.Function.identity;
 

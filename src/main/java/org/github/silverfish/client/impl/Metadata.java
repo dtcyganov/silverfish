@@ -1,6 +1,5 @@
 package org.github.silverfish.client.impl;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
@@ -13,20 +12,11 @@ public class Metadata {
     private final Map<String, String> content;
 
     public Metadata(Map<String, String> content) {
-        this.content = new HashMap<>(content);
-    }
-
-    public String getProperty(String name) {
-        return content.get(name);
-    }
-
-    public long getPropertyAsLong(String name, long defaultValue) {
-        String value = content.get(name);
-        return name == null ? defaultValue : Long.parseLong(value);
+        this.content = content;
     }
 
     public Map<String, String> toMap() {
-        return Collections.unmodifiableMap(content);
+        return content;
     }
 
     public Map<byte[], byte[]> toBytesMap() {
