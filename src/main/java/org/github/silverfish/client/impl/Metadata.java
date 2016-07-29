@@ -19,6 +19,18 @@ public class Metadata {
         return content;
     }
 
+    public long getLongProperty(String name, long defaultValue) {
+        try {
+            return Long.parseLong(content.get(name));
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
+
+    public String getStringProperty(String name, String defaultValue) {
+        return content.getOrDefault(name, defaultValue);
+    }
+
     public Map<byte[], byte[]> toBytesMap() {
         Map<byte[], byte[]> result = new HashMap<>();
         content.forEach((k, v) -> result.put(getBytes(k), getBytes(v)));

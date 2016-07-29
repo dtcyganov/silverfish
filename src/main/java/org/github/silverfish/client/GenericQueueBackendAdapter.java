@@ -49,12 +49,6 @@ public class GenericQueueBackendAdapter<I, E, M, QE extends QueueElement<I, E, M
         return deserializeQueueElements(backend.enqueueNewElements(serializedItems));
     }
 
-    @SafeVarargs
-    @Override
-    public final List<QE> enqueueNewElements(E... elements) throws Exception {
-        return enqueueNewElements(Arrays.asList(elements));
-    }
-
     @Override
     public List<QE> dequeueForProcessing(long count, boolean blocking) throws Exception {
         return deserializeQueueElements(backend.dequeueForProcessing(count, blocking));

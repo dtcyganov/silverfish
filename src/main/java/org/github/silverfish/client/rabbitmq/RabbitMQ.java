@@ -75,11 +75,6 @@ public class RabbitMQ implements Backend<Long, byte[], Void, QueueElement<Long, 
     }
 
     @Override
-    public List<QueueElement<Long, byte[], Void>> enqueueNewElements(byte[]... elements) throws Exception {
-        return enqueueNewElements(Arrays.asList(elements));
-    }
-
-    @Override
     public List<QueueElement<Long, byte[], Void>> dequeueForProcessing(long count, boolean blocking) throws IOException, InterruptedException {
         final List<QueueElement<Long, byte[], Void>> result = new ArrayList<>();
 

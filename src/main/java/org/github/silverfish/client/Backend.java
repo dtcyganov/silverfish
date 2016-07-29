@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
 
+import static java.util.Arrays.asList;
+
 public interface Backend<I, E, M, QE extends QueueElement<I, E, M>> {
 
     /**
@@ -20,7 +22,9 @@ public interface Backend<I, E, M, QE extends QueueElement<I, E, M>> {
      * @param elements elements to put
      * @return list of added elements wrapped into {@link QueueElement}
      */
-    List<QE> enqueueNewElements(E... elements) throws Exception;
+    default List<QE> enqueueNewElements(E... elements) throws Exception {
+        return enqueueNewElements(asList(elements));
+    }
 
     /**
      * Takes <code>count</code> elements from the queue.
@@ -40,12 +44,32 @@ public interface Backend<I, E, M, QE extends QueueElement<I, E, M>> {
     long markProcessed(List<I> ids) throws Exception;
 
     /**
+     * Mark elements as processed.
+     *
+     * @param ids which elements to mark
+     * TODO: return elements
+     */
+    default long markProcessed(I... ids) throws Exception {
+        return markProcessed(asList(ids));
+    }
+
+    /**
      * Mark elements as failed.
      *
      * @param ids which elements to mark
      * TODO: return elements
      */
     long markFailed(List<I> ids) throws Exception;
+
+    /**
+     * Mark elements as failed.
+     *
+     * @param ids which elements to mark
+     * TODO: return elements
+     */
+    default long markFailed(I... ids) throws Exception {
+        return markFailed(asList(ids));
+    }
 
     /**
      * Get last <code>limit</code> elements.

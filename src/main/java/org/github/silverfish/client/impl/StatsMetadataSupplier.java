@@ -6,14 +6,19 @@ import java.util.function.Supplier;
 
 public class StatsMetadataSupplier implements Supplier<Metadata> {
 
+    public static final String PROCESS_COUNT = "process_count";
+    public static final String BAIL_COUNT = "bail_count";
+    public static final String TIME_CREATED = "time_created";
+    public static final String TIME_ENQUEUED = "time_enqueued";
+
     @Override
     public Metadata get() {
         long millis = System.currentTimeMillis();
         Map<String, String> metadata = new HashMap<>();
-        metadata.put("process_count", "0");
-        metadata.put("bail_count", "0");
-        metadata.put("time_created", String.valueOf(millis));
-        metadata.put("time_enqueued", String.valueOf(millis));
+        metadata.put(PROCESS_COUNT, "0");
+        metadata.put(BAIL_COUNT, "0");
+        metadata.put(TIME_CREATED, String.valueOf(millis));
+        metadata.put(TIME_ENQUEUED, String.valueOf(millis));
         return new Metadata(metadata);
     }
 }

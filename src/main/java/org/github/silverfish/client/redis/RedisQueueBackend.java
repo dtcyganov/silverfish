@@ -74,11 +74,6 @@ public class RedisQueueBackend implements Backend<String, byte[], Metadata, Byte
     }
 
     @Override
-    public List<ByteArrayQueueElement> enqueueNewElements(byte[]... elements) throws Exception {
-        return enqueueNewElements(asList(elements));
-    }
-
-    @Override
     public List<ByteArrayQueueElement> dequeueForProcessing(final long count, final boolean blocking) {
         assurePositive(count);
 
@@ -119,7 +114,7 @@ public class RedisQueueBackend implements Backend<String, byte[], Metadata, Byte
 
     @Override
     public List<ByteArrayQueueElement> cleanup(CleanupAction cleanupAction,
-                                            Predicate<Metadata> filter) {
+                                               Predicate<Metadata> filter) {
         assureNotNull(cleanupAction);
         assureNotNull(filter);
 
