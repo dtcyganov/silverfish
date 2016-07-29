@@ -3,19 +3,19 @@ package org.github.silverfish.client.rabbitmq;
 import com.google.common.base.Strings;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.GetResponse;
-import org.github.silverfish.client.Backend;
-import org.github.silverfish.client.CleanupAction;
+import org.github.silverfish.client.WorkingQueue;
 import org.github.silverfish.client.QueueElement;
 
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 /**
  * Created by pbiswas on 2/25/2016.
  */
-public class RabbitMQ implements Backend<Long, byte[], Void, QueueElement<Long, byte[], Void>> {
+public class RabbitMQ implements WorkingQueue<Long, byte[], Void, QueueElement<Long, byte[], Void>> {
     private static final String QUEUE_TYPE;
     //private static final Logger LOGGER;
 
@@ -117,9 +117,9 @@ public class RabbitMQ implements Backend<Long, byte[], Void, QueueElement<Long, 
     }
 
     @Override
-    public long markProcessed(final List<Long> ids) throws IOException {
+    public List<Long> markProcessed(final List<Long> ids) throws IOException {
         if (ids == null || ids.size() == 0) {
-            return 0;
+            return ids;
         }
 
         for (final Long id : ids) {
@@ -129,13 +129,13 @@ public class RabbitMQ implements Backend<Long, byte[], Void, QueueElement<Long, 
             mqConnection.ack(id);
         }
 
-        return ids.size();
+        return ids;
     }
 
     @Override
-    public long markFailed(final List<Long> ids) throws IOException {
+    public List<Long> markFailed(final List<Long> ids) throws IOException {
         if (ids == null || ids.size() == 0) {
-            return 0;
+            return ids;
         }
 
         for (final Long id : ids) {
@@ -147,7 +147,7 @@ public class RabbitMQ implements Backend<Long, byte[], Void, QueueElement<Long, 
             mqConnection.reject(id, requeue);
         }
 
-        return ids.size();
+        return ids;
     }
 
     @Override
@@ -156,8 +156,12 @@ public class RabbitMQ implements Backend<Long, byte[], Void, QueueElement<Long, 
     }
 
     @Override
-    public List<QueueElement<Long, byte[], Void>> cleanup(CleanupAction cleanupAction,
-                                                          Predicate<Void> condition) {
+    public void requeueWorkingElements(Predicate<Void> filter, Consumer<QueueElement<Long, byte[], Void>> consumer) throws Exception {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void dropWorkingElements(Predicate<Void> filter, Consumer<QueueElement<Long, byte[], Void>> consumer) throws Exception {
         throw new UnsupportedOperationException();
     }
 
@@ -168,12 +172,12 @@ public class RabbitMQ implements Backend<Long, byte[], Void, QueueElement<Long, 
     }
 
     @Override
-    public void flush() throws IOException {
+    public void clean() throws IOException {
         mqConnection.flush();
     }
 
     @Override
-    public long length() throws IOException {
+    public long getUnprocessedElementsLength() throws IOException {
         return mqConnection.length();
     }
 

@@ -110,7 +110,7 @@ class RabbitMQConnector implements QueueConnector {
         final AMQP.Queue.DeclareOk result
                 = channel.queueDeclare(name, true, false, false, new HashMap<String, Object>() {{ put("passive", 1); }});
 
-        map.put("length", (long) result.getQueue().length());
+        map.put("getUnprocessedElementsLength", (long) result.getQueue().length());
         map.put("consumers", (long) result.getConsumerCount());
         return map;
     }

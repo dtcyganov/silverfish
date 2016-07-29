@@ -1,17 +1,17 @@
 package org.github.silverfish.client;
 
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
 import static java.util.stream.Collectors.toList;
 
-public class GenericQueueBackendAdapter<I, E, M, QE extends QueueElement<I, E, M>, BI, BE, BM> implements Backend<I, E, M, QE> {
+public class GenericWorkingQueueAdapter<I, E, M, QE extends QueueElement<I, E, M>, BI, BE, BM> implements WorkingQueue<I, E, M, QE> {
 
-    private final Backend<BI, BE, BM, ? extends QueueElement<BI, BE, BM>> backend;
+    private final WorkingQueue<BI, BE, BM, ? extends QueueElement<BI, BE, BM>> workingQueue;
 
     private final Function<E, BE> elementSerializer;
     private final Function<BE, E> elementDeserializer;
@@ -24,7 +24,7 @@ public class GenericQueueBackendAdapter<I, E, M, QE extends QueueElement<I, E, M
 
     private final QueueElementCreator<I, E, M, QE> queueElementCreator;
 
-    public GenericQueueBackendAdapter(Backend<BI, BE, BM, ? extends QueueElement<BI, BE, BM>> backend,
+    public GenericWorkingQueueAdapter(WorkingQueue<BI, BE, BM, ? extends QueueElement<BI, BE, BM>> workingQueue,
                                       Function<E, BE> elementSerializer,
                                       Function<BE, E> elementDeserializer,
                                       Function<I, BI> idSerializer,
@@ -33,7 +33,7 @@ public class GenericQueueBackendAdapter<I, E, M, QE extends QueueElement<I, E, M
                                       Function<BM, M> metadataDeserializer,
                                       QueueElementCreator<I, E, M, QE> queueElementCreator) {
 
-        this.backend = backend;
+        this.workingQueue = workingQueue;
         this.elementSerializer = elementSerializer;
         this.elementDeserializer = elementDeserializer;
         this.idSerializer = idSerializer;
@@ -46,61 +46,74 @@ public class GenericQueueBackendAdapter<I, E, M, QE extends QueueElement<I, E, M
     @Override
     public List<QE> enqueueNewElements(List<E> items) throws Exception {
         List<BE> serializedItems = items.stream().map(elementSerializer::apply).collect(toList());
-        return deserializeQueueElements(backend.enqueueNewElements(serializedItems));
+        return deserializeQueueElements(workingQueue.enqueueNewElements(serializedItems));
     }
 
     @Override
     public List<QE> dequeueForProcessing(long count, boolean blocking) throws Exception {
-        return deserializeQueueElements(backend.dequeueForProcessing(count, blocking));
+        return deserializeQueueElements(workingQueue.dequeueForProcessing(count, blocking));
     }
 
     @Override
-    public long markProcessed(List<I> ids) throws Exception {
-        return backend.markProcessed(serializeIds(ids));
+    public List<I> markProcessed(List<I> ids) throws Exception {
+        return deserializeIds(workingQueue.markProcessed(serializeIds(ids)));
     }
 
     @Override
-    public long markFailed(List<I> ids) throws Exception {
-        return backend.markFailed(serializeIds(ids));
+    public List<I> markFailed(List<I> ids) throws Exception {
+        return deserializeIds(workingQueue.markFailed(serializeIds(ids)));
     }
 
     @Override
     public List<QE> peekUnprocessedElements(long limit) throws Exception {
-        return deserializeQueueElements(backend.peekUnprocessedElements(limit));
+        return deserializeQueueElements(workingQueue.peekUnprocessedElements(limit));
     }
 
     @Override
-    public List<QE> cleanup(CleanupAction cleanupAction, Predicate<M> condition) throws Exception {
-        return deserializeQueueElements(backend.cleanup(cleanupAction, bm -> condition.test(metadataDeserializer.apply(bm))));
+    public void requeueWorkingElements(Predicate<M> filter, Consumer<QE> consumer) throws Exception {
+        workingQueue.requeueWorkingElements(
+                bm -> filter.test(metadataDeserializer.apply(bm)),
+                consumer == null ? null :
+                        be -> consumer.accept(deserializeQueueElement(be))
+        );
+    }
+
+    @Override
+    public void dropWorkingElements(Predicate<M> filter, Consumer<QE> consumer) throws Exception {
+        workingQueue.dropWorkingElements(
+                bm -> filter.test(metadataDeserializer.apply(bm)),
+                consumer == null ? null :
+                        be -> consumer.accept(deserializeQueueElement(be))
+        );
     }
 
     @Override
     public List<QE> removeFailedElements(Predicate<QE> filter, int chunk, int logLimit) throws Exception {
-        return deserializeQueueElements(backend.removeFailedElements(
+        return deserializeQueueElements(workingQueue.removeFailedElements(
                 e -> filter.test(deserializeQueueElement(e)),
                 chunk, logLimit
         ));
     }
 
     @Override
-    public void flush() throws Exception {
-        backend.flush();
+    public void clean() throws Exception {
+        workingQueue.clean();
     }
 
     @Override
-    public long length() throws Exception {
-        return backend.length();
+    public long getUnprocessedElementsLength() throws Exception {
+        return workingQueue.getUnprocessedElementsLength();
     }
 
     @Override
     public Map<String, Long> stats() throws Exception {
-        return backend.stats();
+        return workingQueue.stats();
     }
 
     @Override
     public Map<String, List<QE>> getState() {
         Map<String, List<QE>> result = new LinkedHashMap<>();
-        backend.getState().forEach((queueName, queueElements) ->
+        workingQueue.getState().forEach((queueName, queueElements) ->
                 result.put(
                         queueName,
                         queueElements.stream().map(this::deserializeQueueElement).collect(toList())
@@ -122,5 +135,9 @@ public class GenericQueueBackendAdapter<I, E, M, QE extends QueueElement<I, E, M
 
     private List<BI> serializeIds(List<I> ids) {
         return ids.stream().map(idSerializer::apply).collect(toList());
+    }
+
+    private List<I> deserializeIds(List<BI> ids) {
+        return ids.stream().map(idDeserializer::apply).collect(toList());
     }
 }

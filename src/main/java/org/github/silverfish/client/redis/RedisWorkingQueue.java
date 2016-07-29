@@ -1,8 +1,7 @@
 package org.github.silverfish.client.redis;
 
 import com.google.common.collect.Lists;
-import org.github.silverfish.client.Backend;
-import org.github.silverfish.client.CleanupAction;
+import org.github.silverfish.client.WorkingQueue;
 import org.github.silverfish.client.QueueElement;
 import org.github.silverfish.client.impl.ByteArrayQueueElement;
 import org.github.silverfish.client.impl.Metadata;
@@ -10,6 +9,7 @@ import org.github.silverfish.client.impl.Metadata;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
@@ -18,7 +18,7 @@ import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 import static org.github.silverfish.client.util.ValidityUtils.*;
 
-public class RedisQueueBackend implements Backend<String, byte[], Metadata, ByteArrayQueueElement> {
+public class RedisWorkingQueue implements WorkingQueue<String, byte[], Metadata, ByteArrayQueueElement> {
 
     private static final int DEFAULT_CLAIM_WAIT_TIMEOUT = 30_000;
     private static final int DEFAULT_REQUEUE_LIMIT = 5;
@@ -40,14 +40,14 @@ public class RedisQueueBackend implements Backend<String, byte[], Metadata, Byte
 
     private final RedisQueueOperations redis;
 
-    public RedisQueueBackend(RedisQueueOperations redis,
+    public RedisWorkingQueue(RedisQueueOperations redis,
                              Supplier<String> idSupplier, Supplier<Metadata> metadataSupplier) {
 
         this(redis, idSupplier, metadataSupplier,
                 DEFAULT_CLAIM_WAIT_TIMEOUT, DEFAULT_REQUEUE_LIMIT);
     }
 
-    public RedisQueueBackend(RedisQueueOperations redis,
+    public RedisWorkingQueue(RedisQueueOperations redis,
                              Supplier<String> idSupplier, Supplier<Metadata> metadataSupplier,
                              int claimWaitTimeout, int requeueLimit) {
 
@@ -85,21 +85,21 @@ public class RedisQueueBackend implements Backend<String, byte[], Metadata, Byte
     }
 
     @Override
-    public long markProcessed(List<String> ids) {
+    public List<String> markProcessed(List<String> ids) {
         assureNotEmptyAndWithoutNulls(ids);
 
         return redis.doInOneConnection(() -> {
             List<String> removedIds = redis.dequeue(WORKING_QUEUE, ids);
             redis.unregister(ids);
-            return removedIds.size();
+            return removedIds;
         });
     }
 
     @Override
-    public long markFailed(List<String> ids) {
+    public List<String> markFailed(List<String> ids) {
         assureNotEmptyAndWithoutNulls(ids);
 
-        return requeue(ids, WORKING_QUEUE).size();
+        return requeue(ids, WORKING_QUEUE);
     }
 
     @Override
@@ -113,26 +113,34 @@ public class RedisQueueBackend implements Backend<String, byte[], Metadata, Byte
     }
 
     @Override
-    public List<ByteArrayQueueElement> cleanup(CleanupAction cleanupAction,
-                                               Predicate<Metadata> filter) {
-        assureNotNull(cleanupAction);
+    public void requeueWorkingElements(Predicate<Metadata> filter, Consumer<ByteArrayQueueElement> consumer) {
         assureNotNull(filter);
 
-        return redis.doInOneConnection(() -> {
+        redis.doInOneConnection(() -> {
             List<String> itemsToCleanUp = redis.peek(WORKING_QUEUE, Long.MAX_VALUE).stream().
                     filter(id -> filter.test(redis.getMetadataById(id))).
                     collect(toList());
 
-            if (cleanupAction == CleanupAction.DROP) {
-                List<String> removedIds = redis.dequeue(WORKING_QUEUE, itemsToCleanUp);
-                List<ByteArrayQueueElement> result = removedIds.stream().map(redis::getItemById).collect(toList());
-                redis.unregister(itemsToCleanUp);
-                return result;
+            if (consumer != null) {
+                requeue(itemsToCleanUp, WORKING_QUEUE).stream().map(redis::getItemById).forEach(consumer);
             }
-            if (cleanupAction == CleanupAction.REQUEUE) {
-                return requeue(itemsToCleanUp, WORKING_QUEUE).stream().map(redis::getItemById).collect(toList());
+        });
+    }
+
+    @Override
+    public void dropWorkingElements(Predicate<Metadata> filter, Consumer<ByteArrayQueueElement> consumer) {
+        assureNotNull(filter);
+
+        redis.doInOneConnection(() -> {
+            List<String> itemsToCleanUp = redis.peek(WORKING_QUEUE, Long.MAX_VALUE).stream().
+                    filter(id -> filter.test(redis.getMetadataById(id))).
+                    collect(toList());
+
+            List<String> removedIds = redis.dequeue(WORKING_QUEUE, itemsToCleanUp);
+            if (consumer != null) {
+                removedIds.stream().map(redis::getItemById).forEach(consumer);
             }
-            throw new RuntimeException("Unreachable line");
+            redis.unregister(itemsToCleanUp);
         });
     }
 
@@ -158,7 +166,7 @@ public class RedisQueueBackend implements Backend<String, byte[], Metadata, Byte
     }
 
     @Override
-    public void flush() {
+    public void clean() {
         redis.doInOneConnection(() -> {
             for (String queueName : getAllQueues()) {
                 List<String> ids = redis.peekAll(queueName);
@@ -169,7 +177,7 @@ public class RedisQueueBackend implements Backend<String, byte[], Metadata, Byte
     }
 
     @Override
-    public long length() {
+    public long getUnprocessedElementsLength() {
         return redis.length(UNPROCESSED_QUEUE);
     }
 
